@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# set -x
+
+PROJECT_DIC="$HOME/.scspell/$(git rev-list --parents HEAD | tail -1)/dictionary.txt"
+
+function prepare_scspell_dic
+{
+    if [ ! -f "$PROJECT_DIC" ]; then
+        mkdir -p "$(dirname "$PROJECT_DIC")"
+        echo $(git config --get remote.origin.url) > $(dirname "$PROJECT_DIC")/repo.info
+        touch $PROJECT_DIC
+    fi
+}
+
+function spell_check_typos {
+    local errno=0
+    pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
+    typos $(git diff --name-only --cached --diff-filter=d | while IFS= read -r n; do echo "$n"; done) 
+    errno=$?
+    popd > /dev/null
+
+    if [ $errno -ne 0 ]; then
+        exit $errno
+    fi
+}
+
+function spell_check_scspell {
+    pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
+    scspell $(git diff --name-only --cached --diff-filter=d) --report-only --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD
+    if [ $? -ne 0 ]; then
+       exec < /dev/tty
+       scspell $(git diff --name-only --cached --diff-filter=d) --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD
+       exit
+    fi
+
+    popd > /dev/null
+}
+
+spell_check_typos
+prepare_scspell_dic
+spell_check_scspell
