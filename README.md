@@ -1,0 +1,1 @@
+# git-code-spell-check
