@@ -16,7 +16,7 @@ function prepare_scspell_dic
 function spell_check_typos {
     local errno=0
     pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
-    typos $(git diff --name-only --cached --diff-filter=d | while IFS= read -r n; do echo "$n"; done) 
+    typos $(git diff --name-only --cached --diff-filter=d | while IFS= read -r n; do echo "$n"; done)
     errno=$?
     popd > /dev/null
 
@@ -27,6 +27,10 @@ function spell_check_typos {
 
 function spell_check_scspell {
     pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
+    if [ $(git diff --name-only --cached --diff-filter=d | wc -l) -eq 0 ]; then
+        return # No files has been changed. Prevent scspell to fail due to empty file list
+    fi
+
     scspell $(git diff --name-only --cached --diff-filter=d) --report-only --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD
     if [ $? -ne 0 ]; then
        exec < /dev/tty
