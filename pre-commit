@@ -4,6 +4,10 @@
 
 PROJECT_DIC="$HOME/.scspell/$(git rev-list --parents HEAD | tail -1)/dictionary.txt"
 
+all_files=($(typos --files .))
+all_changes=($(git diff --name-only --cached --diff-filter=d | while IFS= read -r n; do echo "./$n"; done))
+files_to_check=($(echo ${all_files[@]} ${all_changes[@]} | tr ' ' '\n' | sort | uniq -d | while IFS= read -r n; do echo "$n"; done))
+
 function prepare_scspell_dic
 {
     if [ ! -f "$PROJECT_DIC" ]; then
@@ -16,7 +20,7 @@ function prepare_scspell_dic
 function spell_check_typos {
     local errno=0
     pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
-    typos $(git diff --name-only --cached --diff-filter=d | while IFS= read -r n; do echo "$n"; done)
+    typos $(echo ${files_to_check[@]} | while IFS= read -r n; do echo "$n"; done)
     errno=$?
     popd > /dev/null
 
@@ -27,20 +31,19 @@ function spell_check_typos {
 
 function spell_check_scspell {
     pushd $(git rev-parse --git-dir 2> /dev/null)/.. > /dev/null
-    if [ $(git diff --name-only --cached --diff-filter=d | wc -l) -eq 0 ]; then
-        return # No files has been changed. Prevent scspell to fail due to empty file list
-    fi
 
-    scspell $(git diff --name-only --cached --diff-filter=d) --report-only --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD
+    scspell --report-only --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD $(echo ${files_to_check[@]})
     if [ $? -ne 0 ]; then
        exec < /dev/tty
-       scspell $(git diff --name-only --cached --diff-filter=d) --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD
+       scspell --use-builtin-base-dict --override-dictionary "$PROJECT_DIC" --relative-to $PWD $(echo ${files_to_check[@]})
        exit
     fi
 
     popd > /dev/null
 }
 
-spell_check_typos
-prepare_scspell_dic
-spell_check_scspell
+if [ ${#files_to_check[@]} -ne 0 ]; then
+    spell_check_typos
+    prepare_scspell_dic
+    spell_check_scspell
+fi
